@@ -176,16 +176,27 @@ public class DemoController {
             TestCardEntity card = testCardRepository.findByBinPrefix(payment.getCardBin())
                     .orElse(null);
 
+            // Komisyon hesapla
+            BigDecimal commissionRate = card != null ? card.getCommissionRate() : new BigDecimal("1.99");
+            BigDecimal commissionAmount = payment.getAmount()
+                    .multiply(commissionRate)
+                    .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+            BigDecimal netAmount = payment.getAmount().subtract(commissionAmount);
+
             // Authorize + Capture yap (demo için tek adımda)
             payment.setStatus(PaymentStatus.CAPTURED);
             payment.setProviderReference("DEMO-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+            payment.setCommissionRate(commissionRate);
+            payment.setCommissionAmount(commissionAmount);
+            payment.setNetAmount(netAmount);
+            payment.setProviderName(card != null ? card.getBankName() : "MOCK_PROVIDER");
             paymentRepository.save(payment);
 
             // Attempt kaydet
             String bankName = card != null ? card.getBankName() : "Unknown";
             saveAttempt(payment.getId(), bankName, AttemptStatus.SUCCESS, null);
 
-            log.info("Payment completed: {}", paymentId);
+            log.info("Payment completed: {} - Commission: {}% = {} TL", paymentId, commissionRate, commissionAmount);
 
             return ResponseEntity.ok(new ThreeDsResult(
                     true,
@@ -223,11 +234,107 @@ public class DemoController {
                         p.getProviderReference(),
                         p.getCardBin() != null ? p.getCardBin() + "****" + p.getCardLastFour() : null,
                         p.getDescription(),
-                        p.getCreatedAt()
+                        p.getCreatedAt(),
+                        p.getCommissionRate(),
+                        p.getCommissionAmount(),
+                        p.getNetAmount(),
+                        p.getProviderName()
                 ))
                 .toList();
 
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Dashboard metrikleri.
+     */
+    @GetMapping("/metrics")
+    public ResponseEntity<DashboardMetrics> getMetrics() {
+        List<PaymentEntity> allPayments = paymentRepository.findAll();
+        List<ApiLogEntity> recentLogs = apiLogService.getRecentLogs();
+        
+        // Başarılı ödemeler
+        List<PaymentEntity> captured = allPayments.stream()
+                .filter(p -> p.getStatus() == PaymentStatus.CAPTURED)
+                .toList();
+        
+        // Failed ödemeler
+        long failedCount = allPayments.stream()
+                .filter(p -> p.getStatus() == PaymentStatus.FAILED)
+                .count();
+        
+        // Success rate
+        double successRate = allPayments.isEmpty() ? 0 : 
+                (captured.size() * 100.0) / allPayments.size();
+        
+        // Toplam ciro
+        BigDecimal totalRevenue = captured.stream()
+                .map(PaymentEntity::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Toplam komisyon
+        BigDecimal totalCommission = captured.stream()
+                .map(p -> p.getCommissionAmount() != null ? p.getCommissionAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Net gelir
+        BigDecimal netRevenue = totalRevenue.subtract(totalCommission);
+        
+        // Provider dağılımı
+        Map<String, Long> providerDistribution = captured.stream()
+                .filter(p -> p.getProviderName() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                        PaymentEntity::getProviderName,
+                        java.util.stream.Collectors.counting()
+                ));
+        
+        // API metrikleri
+        long totalRequests = recentLogs.size();
+        long successRequests = recentLogs.stream()
+                .filter(l -> l.getResponseStatus() != null && l.getResponseStatus() >= 200 && l.getResponseStatus() < 300)
+                .count();
+        long errorRequests = recentLogs.stream()
+                .filter(l -> l.getResponseStatus() != null && l.getResponseStatus() >= 400)
+                .count();
+        
+        // Latency hesapla
+        double avgLatency = recentLogs.stream()
+                .filter(l -> l.getLatencyMs() != null)
+                .mapToLong(ApiLogEntity::getLatencyMs)
+                .average()
+                .orElse(0);
+        
+        List<Long> latencies = recentLogs.stream()
+                .filter(l -> l.getLatencyMs() != null)
+                .map(ApiLogEntity::getLatencyMs)
+                .sorted()
+                .toList();
+        
+        long p50 = latencies.isEmpty() ? 0 : latencies.get(latencies.size() / 2);
+        long p95 = latencies.isEmpty() ? 0 : latencies.get((int)(latencies.size() * 0.95));
+        long p99 = latencies.isEmpty() ? 0 : latencies.get((int)(latencies.size() * 0.99));
+        
+        // Error rate
+        double errorRate = totalRequests == 0 ? 0 : (errorRequests * 100.0) / totalRequests;
+        
+        return ResponseEntity.ok(new DashboardMetrics(
+                allPayments.size(),
+                captured.size(),
+                failedCount,
+                successRate,
+                totalRevenue,
+                totalCommission,
+                netRevenue,
+                providerDistribution,
+                totalRequests,
+                successRequests,
+                errorRequests,
+                errorRate,
+                avgLatency,
+                p50,
+                p95,
+                p99
+        ));
     }
 
     /**
@@ -316,8 +423,26 @@ public class DemoController {
     record Verify3dsRequest(String otp) {}
     record ThreeDsResult(boolean success, String message, String code, String providerReference) {}
     record TestCardDto(String maskedNumber, String fullNumber, String holder, String expiryMonth, String expiryYear, String cvv, String bankName, String brand, BigDecimal commission, boolean willFail) {}
-    record PaymentListItem(UUID id, String orderId, BigDecimal amount, String currency, String status, String providerRef, String cardInfo, String description, OffsetDateTime createdAt) {}
+    record PaymentListItem(UUID id, String orderId, BigDecimal amount, String currency, String status, String providerRef, String cardInfo, String description, OffsetDateTime createdAt, BigDecimal commissionRate, BigDecimal commissionAmount, BigDecimal netAmount, String providerName) {}
     record ApiLogDto(UUID id, String correlationId, UUID paymentId, String method, String endpoint, String requestBody, Integer responseStatus, String responseBody, Long latencyMs, OffsetDateTime createdAt) {}
     record PaymentDetailResponse(UUID id, String orderId, BigDecimal amount, String currency, String status, String providerRef, String cardBin, String cardLastFour, String description, OffsetDateTime createdAt, List<AttemptDto> attempts) {}
     record AttemptDto(UUID id, String provider, String operation, String status, String errorCode, String errorMessage, Long latencyMs, OffsetDateTime createdAt) {}
+    record DashboardMetrics(
+            int totalPayments,
+            int capturedPayments,
+            long failedPayments,
+            double successRate,
+            BigDecimal totalRevenue,
+            BigDecimal totalCommission,
+            BigDecimal netRevenue,
+            Map<String, Long> providerDistribution,
+            long totalRequests,
+            long successRequests,
+            long errorRequests,
+            double errorRate,
+            double avgLatency,
+            long p50Latency,
+            long p95Latency,
+            long p99Latency
+    ) {}
 }

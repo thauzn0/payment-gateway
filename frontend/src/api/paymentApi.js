@@ -51,4 +51,10 @@ export const getApiLogs = async () => {
   return response.data;
 };
 
+// Dashboard metriklerini getir
+export const getDashboardMetrics = async () => {
+  const response = await api.get('/metrics');
+  return response.data;
+};
+
 export default api;

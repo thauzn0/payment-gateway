@@ -59,6 +59,18 @@ public class PaymentEntity {
     @Column(name = "card_last_four", length = 4)
     private String cardLastFour;
 
+    @Column(name = "commission_rate", precision = 5, scale = 2)
+    private BigDecimal commissionRate;
+
+    @Column(name = "commission_amount", precision = 19, scale = 2)
+    private BigDecimal commissionAmount;
+
+    @Column(name = "net_amount", precision = 19, scale = 2)
+    private BigDecimal netAmount;
+
+    @Column(name = "provider_name", length = 64)
+    private String providerName;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private PaymentStatus status;
