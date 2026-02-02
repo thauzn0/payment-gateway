@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #f8fafc;
+  --color-primary-100: #e2e8f0;
+  --color-primary-500: #0f172a;
+  --color-primary-600: #1e293b;
+  --color-primary-700: #334155;
+  --color-secondary-500: #475569;
+  
+  --animate-spin-slow: spin 2s linear infinite;
+  --animate-fade-in: fadeIn 0.2s ease-out;
+  --animate-slide-up: slideUp 0.2s ease-out;
+  
+  @keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  
+  @keyframes slideUp {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f8fafc;
+  min-height: 100vh;
+}
+
+/* Card number input spacing */
+.card-number-input {
+  letter-spacing: 0.1em;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* OTP Input */
+.otp-input {
+  font-size: 2rem;
+  letter-spacing: 0.5em;
+  text-align: center;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* Status badges */
+.status-CREATED { background-color: #dbeafe; color: #1e40af; }
+.status-AUTHORIZED { background-color: #ffedd5; color: #9a3412; }
+.status-CAPTURED { background-color: #dcfce7; color: #166534; }
+.status-REFUNDED { background-color: #fce7f3; color: #9d174d; }
+.status-FAILED { background-color: #fee2e2; color: #991b1b; }
+
+/* Log method badges */
+.method-POST { background-color: #22c55e; color: white; }
+.method-GET { background-color: #3b82f6; color: white; }
+.method-PUT { background-color: #f97316; color: white; }
+.method-DELETE { background-color: #ef4444; color: white; }
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
