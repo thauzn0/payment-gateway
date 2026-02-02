@@ -35,6 +35,7 @@ public class DemoController {
     private final PaymentRepository paymentRepository;
     private final PaymentAttemptRepository attemptRepository;
     private final TestCardRepository testCardRepository;
+    private final ApiLogRepository apiLogRepository;
     private final ThreeDsService threeDsService;
     private final ApiLogService apiLogService;
 
@@ -363,6 +364,41 @@ public class DemoController {
     }
 
     /**
+     * API log istatistikleri.
+     */
+    @GetMapping("/api-logs/stats")
+    public ResponseEntity<ApiLogStats> getApiLogStats() {
+        long totalCount = apiLogRepository.count();
+        long successCount = apiLogRepository.countByResponseStatusBetween(200, 299);
+        long clientErrorCount = apiLogRepository.countByResponseStatusBetween(400, 499);
+        long serverErrorCount = apiLogRepository.countByResponseStatusGreaterThanEqual(500);
+        long errorCount = clientErrorCount + serverErrorCount;
+        
+        Double avgLatency = apiLogRepository.getAverageLatency();
+        List<Long> latencies = apiLogRepository.getAllLatenciesSorted();
+        
+        long p50 = 0, p95 = 0, p99 = 0;
+        if (!latencies.isEmpty()) {
+            p50 = latencies.get(latencies.size() / 2);
+            p95 = latencies.get(Math.min((int)(latencies.size() * 0.95), latencies.size() - 1));
+            p99 = latencies.get(Math.min((int)(latencies.size() * 0.99), latencies.size() - 1));
+        }
+        
+        double errorRate = totalCount == 0 ? 0 : (errorCount * 100.0) / totalCount;
+        
+        return ResponseEntity.ok(new ApiLogStats(
+                totalCount,
+                successCount,
+                errorCount,
+                errorRate,
+                avgLatency != null ? avgLatency : 0,
+                p50,
+                p95,
+                p99
+        ));
+    }
+
+    /**
      * Payment detayı.
      */
     @GetMapping("/payments/{paymentId}")
@@ -436,6 +472,16 @@ public class DemoController {
             BigDecimal totalCommission,
             BigDecimal netRevenue,
             Map<String, Long> providerDistribution,
+            long totalRequests,
+            long successRequests,
+            long errorRequests,
+            double errorRate,
+            double avgLatency,
+            long p50Latency,
+            long p95Latency,
+            long p99Latency
+    ) {}
+    record ApiLogStats(
             long totalRequests,
             long successRequests,
             long errorRequests,

@@ -1,24 +1,29 @@
 import { useState, useEffect } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { getApiLogs } from '../api/paymentApi';
+import { getApiLogs, getApiLogStats } from '../api/paymentApi';
 
 const ApiLogsPage = () => {
   const [logs, setLogs] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedLog, setExpandedLog] = useState(null);
 
   useEffect(() => {
-    loadLogs();
+    loadData();
   }, []);
 
-  const loadLogs = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getApiLogs();
-      setLogs(data);
+      const [logsData, statsData] = await Promise.all([
+        getApiLogs(),
+        getApiLogStats()
+      ]);
+      setLogs(logsData);
+      setStats(statsData);
     } catch (err) {
-      console.error('Failed to load logs', err);
+      console.error('Failed to load data', err);
     } finally {
       setLoading(false);
     }
@@ -62,40 +67,51 @@ const ApiLogsPage = () => {
     return 'text-slate-700 bg-slate-50';
   };
 
-  const stats = {
-    total: logs.length,
-    success: logs.filter(l => l.responseStatus >= 200 && l.responseStatus < 300).length,
-    error: logs.filter(l => l.responseStatus >= 400).length,
-    avgLatency: Math.round(logs.reduce((sum, l) => sum + (l.latencyMs || 0), 0) / logs.length || 0),
-  };
-
   return (
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 rounded-lg p-4">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Requests</p>
-          <p className="text-2xl font-semibold text-slate-900 mt-1">{stats.total}</p>
+          <p className="text-2xl font-semibold text-slate-900 mt-1">{stats?.totalRequests || 0}</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-lg p-4">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Success (2xx)</p>
-          <p className="text-2xl font-semibold text-emerald-600 mt-1">{stats.success}</p>
+          <p className="text-2xl font-semibold text-emerald-600 mt-1">{stats?.successRequests || 0}</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-lg p-4">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Errors (4xx/5xx)</p>
-          <p className="text-2xl font-semibold text-red-600 mt-1">{stats.error}</p>
+          <p className="text-2xl font-semibold text-red-600 mt-1">{stats?.errorRequests || 0}</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-lg p-4">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg Latency</p>
-          <p className="text-2xl font-semibold text-slate-900 mt-1">{stats.avgLatency}ms</p>
+          <p className="text-2xl font-semibold text-slate-900 mt-1">{Math.round(stats?.avgLatency || 0)}ms</p>
         </div>
       </div>
 
+      {/* Latency Metrics */}
+      {stats && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">P50 Latency</p>
+            <p className="text-xl font-semibold text-slate-900 mt-1">{stats.p50Latency}ms</p>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">P95 Latency</p>
+            <p className="text-xl font-semibold text-amber-600 mt-1">{stats.p95Latency}ms</p>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">P99 Latency</p>
+            <p className="text-xl font-semibold text-red-600 mt-1">{stats.p99Latency}ms</p>
+          </div>
+        </div>
+      )}
+
       {/* Logs List */}
       <Card 
-        title="API Request Logs" 
+        title={`Recent Logs (Last ${logs.length})`}
         actions={
-          <Button onClick={loadLogs} variant="secondary">
+          <Button onClick={loadData} variant="secondary">
             Refresh
           </Button>
         }

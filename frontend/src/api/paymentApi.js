@@ -51,6 +51,12 @@ export const getApiLogs = async () => {
   return response.data;
 };
 
+// API log istatistiklerini getir
+export const getApiLogStats = async () => {
+  const response = await api.get('/api-logs/stats');
+  return response.data;
+};
+
 // Dashboard metriklerini getir
 export const getDashboardMetrics = async () => {
   const response = await api.get('/metrics');
